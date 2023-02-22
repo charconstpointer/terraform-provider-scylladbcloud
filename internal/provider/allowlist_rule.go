@@ -28,7 +28,7 @@ func ResourceAllowlistRule() *schema.Resource {
 		DeleteContext: resourceAllowlistRuleDelete,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -86,7 +86,9 @@ func resourceAllowlistRuleCreate(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	d.SetId(strconv.Itoa(int(rule.ID)))
-	d.Set("rule_id", rule.ID)
+	if err := d.Set("rule_id", rule.ID); err != nil {
+		return diag.Errorf("could not set rule_id: %s", err)
+	}
 
 	return nil
 }
@@ -132,8 +134,12 @@ lookup:
 		return diag.Errorf("unrecognized rule %d", ruleID)
 	}
 
-	d.Set("cidr_block", rule.Address)
-	d.Set("cluster_id", cluster.ID)
+	if err := d.Set("cidr_block", rule.Address); err != nil {
+		return diag.Errorf("could not set cidr_block: %s", err)
+	}
+	if err := d.Set("cluster_id", cluster.ID); err != nil {
+		return diag.Errorf("could not set cluster_id: %s", err)
+	}
 
 	return nil
 }

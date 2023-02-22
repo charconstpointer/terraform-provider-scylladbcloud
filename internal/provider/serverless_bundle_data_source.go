@@ -61,7 +61,9 @@ func dataSourceServerlessBundleRead(ctx context.Context, d *schema.ResourceData,
 	}
 
 	d.SetId(strconv.Itoa(int(clusterID)))
-	d.Set("connection_bundle", string(bundle))
+	if err := d.Set("connection_bundle", string(bundle)); err != nil {
+		return diag.Errorf("could not set connection_bundle: %s", err)
+	}
 
 	return nil
 }

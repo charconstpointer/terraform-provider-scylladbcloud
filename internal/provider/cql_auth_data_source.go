@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -130,9 +131,12 @@ func dataSourceCQLAuthRead(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	d.SetId(seeds)
-	d.Set("username", conn.Credentials.Username)
-	d.Set("password", conn.Credentials.Password)
-	d.Set("seeds", seeds)
-
+	if err := errors.Join(
+		d.Set("username", conn.Credentials.Username),
+		d.Set("password", conn.Credentials.Password),
+		d.Set("seeds", seeds),
+	); err != nil {
+		return diag.Errorf("could not set dataSourceCQLAuthRead properties: %s", err)
+	}
 	return nil
 }

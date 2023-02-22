@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func ResourceCluster() *schema.Resource {
 		DeleteContext: resourceClusterDelete,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -200,7 +201,9 @@ func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, meta int
 
 	if !cidrOK {
 		cidr = "172.31.0.0/16"
-		d.Set("cidr_block", cidr)
+		if err := d.Set("cidr_block", cidr); err != nil {
+			return diag.Errorf("could not set cidr_block: %s", err)
+		}
 	}
 
 	p := c.Meta.ProviderByName(cloud)
@@ -252,7 +255,9 @@ func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	d.SetId(strconv.Itoa(int(cr.ClusterID)))
-	d.Set("request_id", cr.ID)
+	if err := d.Set("request_id", cr.ID); err != nil {
+		return diag.Errorf("could not set requested_id: %s", err)
+	}
 
 	return nil
 }
@@ -269,7 +274,9 @@ func resourceClusterRead(ctx context.Context, d *schema.ResourceData, meta inter
 
 	reqs, err := c.ListClusterRequest(ctx, clusterID, "CREATE_CLUSTER")
 	if scylla.IsDeletedErr(err) {
-		d.Set("status", "DELETED")
+		if err := d.Set("status", "DELETED"); err != nil {
+			return diag.Errorf("could not set status: %s", err)
+		}
 		return nil
 	} else if err != nil {
 		return diag.Errorf("error reading cluster request: %s", err)
@@ -277,7 +284,9 @@ func resourceClusterRead(ctx context.Context, d *schema.ResourceData, meta inter
 	if len(reqs) != 1 {
 		return diag.Errorf("unexpected number of cluster requests, expected 1, got: %+v", reqs)
 	}
-	d.Set("request_id", reqs[0].ID)
+	if err := d.Set("request_id", reqs[0].ID); err != nil {
+		return diag.Errorf("could not set request_id: %s", err)
+	}
 
 	if reqs[0].Status != "COMPLETED" {
 		if err := waitForCluster(ctx, c, reqs[0].ID); err != nil {
@@ -308,25 +317,31 @@ func resourceClusterRead(ctx context.Context, d *schema.ResourceData, meta inter
 }
 
 func setClusterKVs(d *schema.ResourceData, cluster *model.Cluster, p *scylla.CloudProvider) error {
-	d.Set("cluster_id", cluster.ID)
-	d.Set("name", cluster.ClusterName)
-	d.Set("cloud", p.CloudProvider.Name)
-	d.Set("region", cluster.Region.ExternalID)
-	d.Set("node_count", len(model.NodesByStatus(cluster.Nodes, "ACTIVE")))
-	d.Set("user_api_interface", cluster.UserAPIInterface)
-	d.Set("node_type", p.InstanceByID(cluster.Datacenter.InstanceID).ExternalID)
-	d.Set("node_dns_names", model.NodesDNSNames(cluster.Nodes))
-	d.Set("node_private_ips", model.NodesPrivateIPs(cluster.Nodes))
-	d.Set("cidr_block", cluster.Datacenter.CIDRBlock)
-	d.Set("scylla_version", cluster.ScyllaVersion.Version)
-	d.Set("enable_vpc_peering", !strings.EqualFold(cluster.BroadcastType, "PUBLIC"))
-	d.Set("enable_dns", cluster.DNS)
-	d.Set("datacenter_id", cluster.Datacenter.ID)
-	d.Set("datacenter", cluster.Datacenter.Name)
-	d.Set("status", cluster.Status)
+	if err := errors.Join(
+		d.Set("cluster_id", cluster.ID),
+		d.Set("name", cluster.ClusterName),
+		d.Set("cloud", p.CloudProvider.Name),
+		d.Set("region", cluster.Region.ExternalID),
+		d.Set("node_count", len(model.NodesByStatus(cluster.Nodes, "ACTIVE"))),
+		d.Set("user_api_interface", cluster.UserAPIInterface),
+		d.Set("node_type", p.InstanceByID(cluster.Datacenter.InstanceID).ExternalID),
+		d.Set("node_dns_names", model.NodesDNSNames(cluster.Nodes)),
+		d.Set("node_private_ips", model.NodesPrivateIPs(cluster.Nodes)),
+		d.Set("cidr_block", cluster.Datacenter.CIDRBlock),
+		d.Set("scylla_version", cluster.ScyllaVersion.Version),
+		d.Set("enable_vpc_peering", !strings.EqualFold(cluster.BroadcastType, "PUBLIC")),
+		d.Set("enable_dns", cluster.DNS),
+		d.Set("datacenter_id", cluster.Datacenter.ID),
+		d.Set("datacenter", cluster.Datacenter.Name),
+		d.Set("status", cluster.Status),
+	); err != nil {
+		return fmt.Errorf("cannot setClusterKVs: %w", err)
+	}
 
 	if id := cluster.Datacenter.AccountCloudProviderCredentialID; id >= 1000 {
-		d.Set("byoa_id", id)
+		if err := d.Set("byoa_id", id); err != nil {
+			return fmt.Errorf("could not set byoa_id: %w", err)
+		}
 	}
 
 	return nil

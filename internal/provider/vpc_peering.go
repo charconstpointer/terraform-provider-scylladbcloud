@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -27,7 +28,7 @@ func ResourceVPCPeering() *schema.Resource {
 		DeleteContext: resourceVPCPeeringDelete,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -176,9 +177,13 @@ func resourceVPCPeeringCreate(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	d.SetId(vp.ExternalID)
-	d.Set("vpc_peering_id", vp.ID)
-	d.Set("connection_id", vp.ExternalID)
-	d.Set("network_link", vp.NetworkLink())
+	if err := errors.Join(
+		d.Set("vpc_peering_id", vp.ID),
+		d.Set("connection_id", vp.ExternalID),
+		d.Set("network_link", vp.NetworkLink()),
+	); err != nil {
+		return diag.Errorf("could not set resource VPC peering properties: %s", err)
+	}
 
 	return nil
 }
@@ -230,18 +235,23 @@ lookup:
 	}
 
 	r := p.RegionByID(vpcPeering.RegionID)
-
-	d.Set("datacenter", cluster.Datacenter.Name)
-	d.Set("peer_vpc_id", vpcPeering.VPCID)
-	d.Set("peer_region", r.ExternalID)
-	d.Set("peer_account_id", vpcPeering.OwnerID)
-	d.Set("vpc_peering_id", vpcPeering.ID)
-	d.Set("connection_id", vpcPeering.ExternalID)
-	d.Set("cluster_id", cluster.ID)
-	d.Set("network_link", vpcPeering.NetworkLink())
+	if err := errors.Join(
+		d.Set("datacenter", cluster.Datacenter.Name),
+		d.Set("peer_vpc_id", vpcPeering.VPCID),
+		d.Set("peer_region", r.ExternalID),
+		d.Set("peer_account_id", vpcPeering.OwnerID),
+		d.Set("vpc_peering_id", vpcPeering.ID),
+		d.Set("connection_id", vpcPeering.ExternalID),
+		d.Set("cluster_id", cluster.ID),
+		d.Set("network_link", vpcPeering.NetworkLink()),
+	); err != nil {
+		return diag.Errorf("could not set resource VPC peering properties: %s", err)
+	}
 
 	if c.Meta.GCPBlocks[r.ExternalID] != vpcPeering.CIDRList[0] {
-		d.Set("peer_cidr_block", vpcPeering.CIDRList[0])
+		if err := d.Set("peer_cidr_block", vpcPeering.CIDRList[0]); err != nil {
+			return diag.Errorf("could not set peer_cidr_block: %s", err)
+		}
 	}
 
 	return nil

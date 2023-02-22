@@ -29,7 +29,7 @@ func ResourceServerlessCluster() *schema.Resource {
 		DeleteContext: resourceServerlessClusterDelete,
 
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Timeouts: &schema.ResourceTimeout{
@@ -99,7 +99,9 @@ func resourceServerlessClusterCreate(ctx context.Context, d *schema.ResourceData
 	}
 
 	d.SetId(strconv.Itoa(int(cr.ClusterID)))
-	d.Set("free_tier", cluster.FreeTier)
+	if err := d.Set("free_tier", cluster.FreeTier); err != nil {
+		return diag.Errorf("could not set free_tier: %s", err)
+	}
 
 	return nil
 }
@@ -134,7 +136,9 @@ func resourceServerlessClusterRead(ctx context.Context, d *schema.ResourceData, 
 	}
 
 	d.SetId(strconv.Itoa(int(clusterID)))
-	d.Set("free_tier", cluster.FreeTier)
+	if err = d.Set("free_tier", cluster.FreeTier); err != nil {
+		return diag.Errorf("could not set free_tier: %s", err)
+	}
 
 	return nil
 }
